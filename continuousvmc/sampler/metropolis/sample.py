@@ -21,7 +21,7 @@ from ..generic import (
     MCMCState,
 )
 
-from ...utils.types import Array, Key, default_real
+from ...utils.types import Array, Key, Scalar, default_real
 
 
 @struct.dataclass

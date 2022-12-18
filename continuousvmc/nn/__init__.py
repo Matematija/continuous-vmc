@@ -10,7 +10,7 @@ from .initializers import (
     ones,
 )
 
-from activations import (
+from .activations import (
     log_cosh,
     log_i0,
     log_i0_pade,

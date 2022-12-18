@@ -109,7 +109,7 @@ def check_optimizer_state(state: OptimizerState, throw: bool = False) -> Sequenc
 ########################################################################################################################
 
 
-def SR(
+def StochasticReconfiguration(
     logpsi: Ansatz,
     eloc: LocalEnergy,
     sampler: Callable,
@@ -199,6 +199,8 @@ def SR(
 
     return init, kernel
 
+
+QuantumNaturalGradient = StochasticReconfiguration
 
 ########################################################################################################################
 

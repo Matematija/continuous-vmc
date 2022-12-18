@@ -7,7 +7,7 @@ from ..metric import Metric
 from ..generic import MCMCParams, MCMCState
 
 from ...utils import curry
-from ...utils.types import Array, Key
+from ...utils.types import Array, Key, Scalar
 
 
 def rwm_proposal(metric: Metric, step_size: Scalar, x: Array, key: Key):

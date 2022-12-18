@@ -13,7 +13,7 @@ from ..metric import IdentityMetric
 from ..generic import center_proposal, no_postprocessing, randn_init_fn, angular_init_fn, MCMCParams
 
 from ...utils import eval_observables
-from ...utils.types import Key, Ansatz, PyTree
+from ...utils.types import Key, Ansatz, PyTree, Scalar
 
 
 @struct.dataclass

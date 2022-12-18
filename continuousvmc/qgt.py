@@ -396,6 +396,55 @@ def QuantumGeometricTensor(
     **solver_kwargs,
 ) -> Union[QGT, IterativeQGT]:
 
+    """Instantiates a quantum geometric tensor object, encapsulating the (regularized) linear solver.
+
+    Parameters
+    ----------
+    logpsi : Union[Ansatz, Callable]
+        The log-wavefunction ansatz.
+    solver : str, optional
+        The linear solver name as a string. Options:
+            * "shift" (default): Apply `eps` as a diagonal shift to the QGT and invert
+                using `jax.scipy.linalg.solve` (Cholesky). No special additional `solver_kwargs`
+            * "svd": Apply `eps` as a diagonal shift to the QGT and solve the corresponding
+                least-squares problem by singular value decomposition (SVD). Additional `solver_kwargs`:
+                - `rcond` & `acond` : Singular value (s) cutoff defined as
+                    cutoff = maximum(acond, rcond * max(s))
+                - `inv_fn` : Alternatively, a function that takes the singular values
+                    and returns their regularized inverse
+            * "snr": Similarly to "svd", but with a singular value cutoff defined as through the
+                "Signal-to-Noise Ratio" method of Schmitt and Heyl (https://arxiv.org/abs/1912.08828).
+                Additional `solver_kwargs`:
+                - `snr_cutoff` : The Signal-to-Noise Ratio (SNR) cutoff value
+                - `exponent` : The exponent of the default SNR pseudoinverse function :
+                    `s -> (1 + (cutoff / s) ** (-exponent)`
+                - `svd_arcond` & `svd_rcond` : Singular value (s) cutoff defined as
+                    cutoff = maximum(acond, rcond * max(s))
+                - `reg_fn` : Alternatively, a custom pseudoinverse function that takes the
+                    singular values and/or the SNR values and returns the regularized inverse
+            * "cg": Solve the linear system using `jax.scipy.sparse.linalg.cg` (Conjugate Gradient).
+                Additional `solver_kwargs`: see `jax.scipy.sparse.linalg.cg` documentation.
+            * "gmres": Solve the linear system using `jax.scipy.sparse.linalg.gmres` (Generalized Minimal RESidual).
+                Additional `solver_kwargs`: see `jax.scipy.sparse.linalg.gmres` documentation.
+            * "bicgstab": Solve the linear system using `jax.scipy.sparse.linalg.bicgstab` (Biconjugate Gradient Stabilized).
+                Additional `solver_kwargs`: see `jax.scipy.sparse.linalg.bicgstab` documentation.
+    eps : Scalar, optional
+        The diagonal shift to apply to the QGT for additional regularization,
+        by default None (zero).
+    scale : bool, optional
+        Whether to operate on the scaled version of the QGT or not, by default False
+        Scaling:  S _{i j} -> S _{i j} / sqrt( S _{i i} S _{j j}
+    chunk_size : Optional[int], optional
+        Chunking to employ for vectorized applications of the ansatz
+        to samples, by default None (no chunking)
+
+    Returns
+    -------
+    Union[QGT, IterativeQGT]
+        The quantum geometric tensor object with methods to compute the QGT
+        (`.to_dense`) and solve linear systems (`.solve`).
+    """
+
     apply_fn = logpsi.apply if hasattr(logpsi, "apply") else logpsi
 
     solver = solver.lower()
