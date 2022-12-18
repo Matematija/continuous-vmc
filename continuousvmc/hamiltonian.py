@@ -263,11 +263,11 @@ def QuantumRotors(
 
     return QuantumRotorModel(
         dims=tuple(logpsi.dims),
-        g=Scalar(g),
+        g=float(g),
         apply_fn=apply_fn,
         kinetic_fn=kinetic_fn,
         potential_fn=potential_fn,
-        J=Scalar(J),
+        J=float(J),
         pbc=bool(pbc),
         chunk_size=chunk_size,
     )
