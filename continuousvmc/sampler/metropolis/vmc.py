@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 
 import jax
+from jax import numpy as jnp
 from jax.tree_util import Partial
 
 from flax import struct
@@ -48,6 +49,11 @@ def VariationalMetropolis(
     observables: Optional[Sequence[Callable]] = None,
 ) -> VRWM:
 
+    if hasattr(logpsi, "log_prob"):
+        log_prob = logpsi.log_prob
+    else:
+        log_prob = lambda params, x: 2 * jnp.real(logpsi(params, x))
+
     if not angular:
         postprocess_proposal = no_postprocessing
         init_fn = randn_init_fn
@@ -55,10 +61,11 @@ def VariationalMetropolis(
         postprocess_proposal = center_proposal
         init_fn = angular_init_fn
 
+    dims = logpsi.dims if dims is None else tuple(dims)
     log_step_size_bounds = tuple(np.log(x) for x in step_size_bounds)
 
     rwm_params = MCMCParams(
-        dims=logpsi.dims,
+        dims=dims,
         n_samples=n_samples,
         n_chains=n_chains,
         warmup=warmup,
@@ -85,7 +92,7 @@ def VariationalMetropolis(
 
     eval_obs = partial(eval_observables, observables)
 
-    return VRWM(Partial(logpsi.log_prob), rwm_params, eval_obs)
+    return VRWM(Partial(log_prob), rwm_params, eval_obs)
 
 
 @partial(jax.jit, static_argnames=["rwm_params", "eval_obs"])

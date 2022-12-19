@@ -7,6 +7,7 @@ from jax.tree_util import Partial, tree_map
 
 from flax import struct
 
+from .ansatz import canonicalize_ansatz
 from .utils import tree_conj, vmap_chunked
 from .utils.ad import vjp, grad_and_diag_hess
 from .utils.types import Scalar, Ansatz, Array, PyTree, tree_is_real, tree_is_complex, complex_dtype
@@ -30,6 +31,7 @@ class LocalEnergy:
 def eloc_value_and_grad(
     eloc: LocalEnergy, params: PyTree, samples: Array, chunk_size: Optional[int]
 ) -> Tuple[Scalar, PyTree, PyTree]:
+
     """Calculate the local energy and its gradient from model parameters and samples.
 
     Parameters
@@ -249,7 +251,7 @@ def QuantumRotors(
     if len(dims) not in [1, 2]:
         raise ValueError(f"Dimensions not 1 or 2 not supported yet! Got dim={len(dims)}")
 
-    apply_fn = Partial(logpsi.apply)
+    apply_fn = Partial(canonicalize_ansatz(logpsi))
 
     if g != 0:
         kinetic_fn = _make_kinetic_fn(logpsi, full_hessian=full_hessian)

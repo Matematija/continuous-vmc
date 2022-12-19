@@ -389,3 +389,10 @@ class Product(nn.Module):
 
 def ProductAnsatz(*log_factors):
     return Product(log_factors)
+
+
+##################################################################
+
+
+def canonicalize_ansatz(logpsi) -> Callable[[PyTree, Array], Array]:
+    return logpsi.apply if hasattr(logpsi, "apply") else logpsi

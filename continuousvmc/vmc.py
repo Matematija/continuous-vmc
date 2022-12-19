@@ -6,8 +6,10 @@ from jax.tree_util import tree_map
 
 from flax import struct
 
+from .ansatz import canonicalize_ansatz
 from .hamiltonian import LocalEnergy, eloc_value_and_grad
 from .qgt import QuantumGeometricTensor
+from .utils import eval_shape
 from .utils.types import Ansatz, Key, PyTree, Scalar, tree_is_real
 
 
@@ -35,12 +37,14 @@ def ParameterDerivative(
         logpsi, solver=solver, eps=eps, chunk_size=eloc.chunk_size, **solver_kwargs
     )
 
+    apply_fn = canonicalize_ansatz(logpsi)
+
     def derivative(params: PyTree, key: Key, x0: Optional[PyTree] = None):
 
         # key, _ = mpi_scatter_keys(key)
 
         samples, observables, sampler_info = sampler(params, key)
-        out_shape = jax.eval_shape(logpsi.apply, params, samples[0])
+        out_shape = eval_shape(apply_fn, params, samples[0])
 
         if tree_is_real(out_shape) and real_time:
             raise RuntimeError("Cannot do time evolution with purely real wavefunctions.")

@@ -1,18 +1,17 @@
-from typing import Union
-import numpy as np
-import jax
+from typing import Union, Callable
+import jax, chex
 import flax.linen as nn
-import chex
 
 ####################################################################################################
 
-Ansatz = nn.Module
 Key = chex.PRNGKey
 PyTree = chex.ArrayTree
 Array = Union[chex.Array, chex.ArrayNumpy, chex.ArrayBatched]
 Scalar = Union[chex.Scalar, chex.Numeric]
 DType = chex.ArrayDType
 Token = jax.core.Token
+
+Ansatz = Union[nn.Module, Callable[[PyTree, Array], Scalar]]
 
 ####################################################################################################
 

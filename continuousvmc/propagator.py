@@ -9,6 +9,7 @@ from flax import struct
 from .vmc import ParameterDerivative
 from .integrate import RungeKutta, check_integrator_state
 
+from .ansatz import canonicalize_ansatz
 from .hamiltonian import LocalEnergy
 from .vmc import VMCInfo
 from .utils import vmap_chunked, tree_size
@@ -149,7 +150,7 @@ def Propagator(
         **solver_kwargs,
     )
 
-    norm_fn = make_qgt_norm(logpsi.apply)
+    norm_fn = make_qgt_norm(canonicalize_ansatz(logpsi))
 
     integrator = RungeKutta(
         params_dot,

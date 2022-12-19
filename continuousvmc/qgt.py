@@ -11,6 +11,7 @@ from jax._src.numpy.util import _promote_dtypes_inexact
 
 from flax import struct
 
+from .ansatz import canonicalize_ansatz
 from .utils.ad import grad
 from .utils.tree import basis_of, tree_destructure, tree_conj, xpay
 from .utils.chunk import vmap_chunked
@@ -433,7 +434,8 @@ def QuantumGeometricTensor(
         by default None (zero).
     scale : bool, optional
         Whether to operate on the scaled version of the QGT or not, by default False
-        Scaling:  S _{i j} -> S _{i j} / sqrt( S _{i i} S _{j j}
+        Scaling:  S _{i j} -> S _{i j} / sqrt( S _{i i} S _{j j} )
+        WARNING: Scaling is an experimental feature and may not work as expected.
     chunk_size : Optional[int], optional
         Chunking to employ for vectorized applications of the ansatz
         to samples, by default None (no chunking)
@@ -445,13 +447,16 @@ def QuantumGeometricTensor(
         (`.to_dense`) and solve linear systems (`.solve`).
     """
 
-    apply_fn = logpsi.apply if hasattr(logpsi, "apply") else logpsi
+    apply_fn = canonicalize_ansatz(logpsi)
 
     solver = solver.lower()
 
     solver_kwargs = {
         key: Partial(val) if callable(val) else val for key, val in solver_kwargs.items()
     }
+
+    if scale:
+        warn("QGT with `scale=True` is an experimental feature and may not work as expected.")
 
     if solver.lower() in _DENSE_SLOVERS:
 

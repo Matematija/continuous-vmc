@@ -134,12 +134,9 @@ def hmc_sample(hmc_params: HMCParams, initial_h: Hamiltonian, key: Key):
 
     keys = random.split(key, hmc_params.n_chains)
 
-    samples, info = jax.vmap(
-        sample_hmc_chain,
-        in_axes=(None, None, 0),
-        out_axes=(0, 0),
-        # chunk_size=hmc_params.chunk_size,
-    )(hmc_params, initial_h, keys)
+    samples, info = jax.vmap(sample_hmc_chain, in_axes=(None, None, 0), out_axes=(0, 0))(
+        hmc_params, initial_h, keys
+    )
 
     info = info.replace(n_chains=hmc_params.n_chains)
     out_samples = samples.reshape(-1, *hmc_params.dims).squeeze()

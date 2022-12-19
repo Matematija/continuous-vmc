@@ -1,5 +1,6 @@
 from functools import partial
-from typing import Callable, Optional, Sequence, Tuple
+from warnings import warn
+from typing import Callable, Optional, Sequence, Tuple, Any
 
 import numpy as np
 
@@ -16,7 +17,7 @@ from ..metric import IdentityMetric
 from ..generic import no_postprocessing, center_proposal, randn_init_fn, angular_init_fn
 
 from ...utils import eval_observables
-from ...utils.types import Key, PyTree, Ansatz, Scalar
+from ...utils.types import Key, PyTree, Ansatz, Scalar, Array
 
 
 @struct.dataclass
@@ -44,6 +45,9 @@ class VHMC:
         return {k: v for k, v in self.params.__dict__.items() if not callable(v)}
 
 
+Observable = Callable[[PyTree, Array], Any]
+
+
 def VariationalHMC(
     logpsi: Ansatz,
     n_samples: int,
@@ -63,16 +67,17 @@ def VariationalHMC(
     init_step_size_search: bool = True,
     angular: bool = False,
     augmented: bool = False,
-    observables: Optional[Sequence[Callable]] = None,
-    chunk_size: Optional[int] = None,
+    observables: Optional[Sequence[Observable]] = None
 ) -> VHMC:
+
     """The variational HMC sampler, allowing for changing variational parameters without
     recompiling the sampler itself. A wrapper around `sampler.sample.HamiltonianMonteCarlo`.
 
     Parameters
     ----------
     logpsi : Ansatz
-        The trial wavefunction.
+        The trial wavefunction. It is expected to either be a callable or have a `.log_prob` method
+        which takes variational parameters and a set of samples as arguments, and returns the log-probability.
     n_samples : int
         The number of samples to generate per chain.
     n_chains : int
@@ -87,48 +92,63 @@ def VariationalHMC(
     dims : Sequence[int], optional
         Array dimensions of a single sample, by default None (queried from `logpsi`).
     adapt_step_size : bool, optional
-        _description_, by default True
+        Whether to adapt the step size during warmup/adaptation, by default True.
     step_size_bounds : Tuple[Scalar, Scalar], optional
-        _description_, by default (1e-8, 10.0)
+        Upper and lower bounds for the leapfrog step size, by default (1e-8, 10.0).
     adapt_metric : bool, optional
-        _description_, by default True
+        Whether to adapt the momentum metric tensor during warmup/adaptation, by default True.
     diagonal_metric : bool, optional
-        _description_, by default True
+        Whether to use a diagonal momentum metric tensor (as opposed to a full dense
+        covariance matrix), by default True.
     jitter : Scalar, optional
-        _description_, by default 0.2
+        Jitter to add the leapfrog trajectory length, by default 0.2. Practicaly, that means
+        that each time a leapfrog-based proposal is generated, its trajectory length is sampled as:
+        length ~ Uniform([(1 - `jitter`) * `n_leaps`, (1 + `jitter`) * `n_leaps`])
     target_acc_rate : Scalar, optional
-        _description_, by default 0.65
+        The target acceptance rate, by default 0.65. Leapfrog step size is adjusted during
+        warmup/adaptation to try to match this rate.
     initial_step_size : Scalar, optional
-        _description_, by default 0.1
+        The initial leapfrog step size, by default 0.1.
     init_step_size_search : bool, optional
-        _description_, by default True
+        Whether to perform a fast-and-cheap step size search to find the right order of magnitude
+        before adaptation itself, by default True.
     angular : bool, optional
-        _description_, by default False
+        Whether to treat variables as angles between [-pi, pi], by default False.
     augmented : bool, optional
-        _description_, by default False
-    observables : Optional[Sequence[Callable]], optional
-        _description_, by default None
-    chunk_size : Optional[int], optional
-        _description_, by default None
+        Whether to "augment" the variational distribution of N angular variables with N auxilliary
+        radial variables, turning the problem into an unconstrained sampling problem, by default False.
+        WARNING: This is experimental and may not work as expected.
+    observables : Sequence[Observable], optional
+        Observables to evaluate on the samples, by default None. An "observable" is a
+        `Callable[[PyTree, Array], Any]` (a callable that takes the variational parameters
+        and samples to return a value)
 
     Returns
     -------
     VHMC
-        _description_
+        A callable object that takes variational parameters and a `jax.random.PRNGKey` key and returns
+        samples from the encapsulated probability distribution.
     """
 
+    if hasattr(logpsi, "log_prob"):
+        log_prob = logpsi.log_prob
+    else:
+        log_prob = lambda params, x: 2 * jnp.real(logpsi(params, x))
+
     if augmented:
+
+        warn("Sampling with `augmented=True` is experimental and may not work as expected.")
 
         angular = False
 
         @Partial
         def logp(params, xy):
             thetas = jnp.arctan2(xy[1], xy[0])
-            return -0.5 * jnp.sum(xy**2) + logpsi.log_prob(params, thetas)
+            return -0.5 * jnp.sum(xy**2) + log_prob(params, thetas)
 
         dims = (2,) + logpsi.dims if dims is None else tuple(dims)
     else:
-        logp = Partial(logpsi.log_prob)
+        logp = Partial(log_prob)
         dims = logpsi.dims if dims is None else tuple(dims)
 
     if angular:
@@ -158,7 +178,7 @@ def VariationalHMC(
         init_fn=init_fn,
         postprocess_fn=postprocess_proposal,
         jitter=jitter,
-        chunk_size=chunk_size,
+        chunk_size=None,
     )
 
     if observables is not None and not isinstance(observables, tuple):
