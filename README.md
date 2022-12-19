@@ -1,6 +1,6 @@
 # Variational Monte Carlo with continuous variables
 
-Research code for neural-network variational quantum states operating on continuous degrees of freedom. This code implements the *standard* **Variational Monte Carlo** (VMC) algorithm for lattice systems with a focus **real-time evolution**.
+Research code for neural-network variational quantum states operating on continuous degrees of freedom. This code implements the *standard* **Variational Monte Carlo** (VMC) algorithm for lattice systems with a focus on **real-time evolution**.
 
 Code author: Matija Medvidović
 
@@ -32,15 +32,83 @@ pip install ./continuous-vmc
 import jax
 from jax import numpy as jnp
 
-import continuousvmc as vmc
-from continuousvmc.ansatz import RotorCNN
-
-# Finish!
+from continuousvmc import RotorCNN, VariationalHMC, StochasticReconfiguration, QuantumRotors
 ```
 
-More examples can be found in the examples folder.
+Define the variational wavefunction and initialize its the parameters:
 
-## Main functionality
+```python
+logpsi = RotorCNN(dims=(4,4), kernels=[3,3], K=4, param_dtype=jnp.complex64)
+
+key = jax.random.PRNGKey(42)
+params = logpsi.initialize(key)
+```
+
+and the local energy associated with the Hamiltonian:
+
+```python
+eloc = QuantumRotors(logpsi, g=6.0, pbc=False, chunk_size=4000)
+```
+
+Local energies can be computed by simply calling `eloc` or alongside gradients w.r.t the variational parameters `params`:
+
+```python
+dummy_inputs = np.random.randn(100, *logpsi.dims)
+value, grad = eloc.value_and_grad(params, dummy_inputs)
+```
+
+Constructing the Hamiltonian Monte Carlo (HMC) sampler is equally simple:
+
+```python
+sampler = VariationalHMC(logpsi, n_samples=200, n_chains=50, warmup=600, n_leaps=40, target_acc_rate=0.8)
+```
+
+Samples can be obtained with:
+
+```python
+key, = jax.random.split(key, 1)
+samples, observables, info = sampler(params, key)
+```
+
+Finally, we can find the ground state of the corresponding Hamiltonian by using one of the optimizers on offer:
+
+```python
+init, kernel = StochasticReconfiguration(
+    logpsi, eloc, sampler, lr=1e-2, solver='shift', eps=1e-3
+)
+
+kernel = jax.jit(kernel)
+state = init(params)
+```
+
+One optimization step can then be performed with: `state = kernel(state, key)`.
+
+Alternatively, real-time evolution from the initial state described by `params` can be performed by defining:
+
+```python
+init, integrator = Propagator(
+    logpsi,
+    eloc,
+    sampler,
+    solver='svd',
+    eps=0.0,
+    integrator='rk23',
+    integrator_dt=1e-3,
+    integrator_atol=1e-3,
+    integrator_rtol=1e-2,
+    solver_acond=1e-3,
+    solver_rcond=1e-2,
+)
+
+key = random.PRNGKey(1337)
+state = init(params, key=key)
+```
+
+and then performing one step of the integrator with `state = integrator(state, key)`.
+
+More examples can be found in the [examples folder](./examples).
+
+## Main features overview
 
 This code implements the [time-independent](https://en.wikipedia.org/wiki/Variational_Monte_Carlo) and [time-dependent](https://en.wikipedia.org/wiki/Time-dependent_variational_Monte_Carlo) versions of the VMC. Automatic differentiation and GPU support is provided through [JAX](https://github.com/google/jax).
 
