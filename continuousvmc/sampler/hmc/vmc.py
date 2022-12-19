@@ -66,6 +66,56 @@ def VariationalHMC(
     observables: Optional[Sequence[Callable]] = None,
     chunk_size: Optional[int] = None,
 ) -> VHMC:
+    """The variational HMC sampler, allowing for changing variational parameters without
+    recompiling the sampler itself. A wrapper around `sampler.sample.HamiltonianMonteCarlo`.
+
+    Parameters
+    ----------
+    logpsi : Ansatz
+        The trial wavefunction.
+    n_samples : int
+        The number of samples to generate per chain.
+    n_chains : int
+        The number of independent chains to run.
+    warmup : int
+        The number of warmup steps to run, optionally adapting
+        the momentum metric tensor and the leapfrog step size.
+    n_leaps : int
+        The number of leapfrog steps to take per sample proposal.
+    sweep : int, optional
+        The number of samples to discard in between recording a sample, by default 1.
+    dims : Sequence[int], optional
+        Array dimensions of a single sample, by default None (queried from `logpsi`).
+    adapt_step_size : bool, optional
+        _description_, by default True
+    step_size_bounds : Tuple[Scalar, Scalar], optional
+        _description_, by default (1e-8, 10.0)
+    adapt_metric : bool, optional
+        _description_, by default True
+    diagonal_metric : bool, optional
+        _description_, by default True
+    jitter : Scalar, optional
+        _description_, by default 0.2
+    target_acc_rate : Scalar, optional
+        _description_, by default 0.65
+    initial_step_size : Scalar, optional
+        _description_, by default 0.1
+    init_step_size_search : bool, optional
+        _description_, by default True
+    angular : bool, optional
+        _description_, by default False
+    augmented : bool, optional
+        _description_, by default False
+    observables : Optional[Sequence[Callable]], optional
+        _description_, by default None
+    chunk_size : Optional[int], optional
+        _description_, by default None
+
+    Returns
+    -------
+    VHMC
+        _description_
+    """
 
     if augmented:
 

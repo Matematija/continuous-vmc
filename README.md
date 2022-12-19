@@ -23,7 +23,7 @@ pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases
 
 To install the package itself, clone simply the repo and run
 ```bash
-pip install continuous-vmc
+pip install ./continuous-vmc
 ```
 
 ## A quick example
