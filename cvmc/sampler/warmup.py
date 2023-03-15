@@ -182,7 +182,7 @@ def step_size_adaptation(
     target_acc_prob: Scalar,
     *,
     init_step_size_search: bool = True,
-    step_size_lims: Tuple[Scalar, Scalar] = (1e-8, 10.0),
+    log_step_size_bounds: Tuple[float, float] = (-8.0, 1.0),
     **optim_kwargs,
 ) -> Tuple[MCMCState, Metric]:
 
@@ -198,7 +198,7 @@ def step_size_adaptation(
         n_steps=n_steps,
         key=key,
         adapt_metric=False,
-        step_size_lims=step_size_lims,
+        log_step_size_bounds=log_step_size_bounds,
         optim_kwargs=optim_kwargs,
     )
 

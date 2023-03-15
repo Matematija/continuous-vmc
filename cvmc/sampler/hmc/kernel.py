@@ -72,7 +72,7 @@ def hmc_kernel(hmc_params: HMCParams, h: Hamiltonian, state: MCMCState, key: Key
     x = state.x
 
     p = random.normal(key1, shape=x.shape, dtype=x.dtype)
-    p = h.metric.transform_normal(p)
+    p = h.metric.transform_momentum(p)
 
     n_leaps = jitter_trajectory_length(hmc_params.n_leaps, hmc_params.jitter, key2)
 

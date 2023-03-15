@@ -52,6 +52,7 @@ def stan_warmup(
         n_steps=init_fast,
         key=key1,
         adapt_metric=False,
+        log_step_size_bounds=rwm_params.log_step_size_bounds,
         optim_kwargs=optim_kwargs,
         metric_kwargs=metric_kwargs,
     )
@@ -69,6 +70,7 @@ def stan_warmup(
             n_steps=n_steps,
             key=keys[i],
             adapt_metric=True,
+            log_step_size_bounds=rwm_params.log_step_size_bounds,
             optim_kwargs=optim_kwargs,
             metric_kwargs=metric_kwargs,
         )
@@ -83,6 +85,7 @@ def stan_warmup(
         n_steps=final_fast,
         key=key2,
         adapt_metric=False,
+        log_step_size_bounds=rwm_params.log_step_size_bounds,
         optim_kwargs=optim_kwargs,
         metric_kwargs=metric_kwargs,
     )
@@ -142,6 +145,7 @@ def warmup(
                 init_slow=init_slow,
                 final_fast=final_fast,
                 n_slow_windows=n_slow_windows,
+                init_step_size_search=rwm_params.init_step_size_search,
                 optim_kwargs=optim_kwargs,
                 metric_kwargs=metric_kwargs,
             )
@@ -158,7 +162,13 @@ def warmup(
         if rwm_params.adapt_step_size:
 
             state = step_size_adaptation(
-                kernel, state, rwm_params.warmup, key, rwm_params.target_acc_rate, **optim_kwargs
+                kernel,
+                state,
+                rwm_params.warmup,
+                key,
+                rwm_params.target_acc_rate,
+                log_step_size_bounds=rwm_params.log_step_size_bounds,
+                **optim_kwargs,
             )
 
         else:

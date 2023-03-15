@@ -14,7 +14,7 @@ from ..metric import IdentityMetric
 from ..generic import center_proposal, no_postprocessing, randn_init_fn, angular_init_fn, MCMCParams
 
 from ...utils import eval_observables
-from ...utils.types import Key, Ansatz, PyTree, Scalar
+from ...utils.types import Key, Ansatz, PyTree, Scalar, Array
 
 
 @struct.dataclass
@@ -24,11 +24,13 @@ class VRWM:
     params: MCMCParams
     eval_observables: Callable = struct.field(repr=False, pytree_node=False)
 
-    def __call__(self, params: PyTree, key: Key):
-        return self.sample(params, key)
+    def __call__(self, params: PyTree, key: Key, *args, **kwargs):
+        return self.sample(params, key, *args, **kwargs)
 
-    def sample(self, params: PyTree, key: Key):
-        return _vmc_rwm_sample(self.params, self.log_prob, self.eval_observables, params, key)
+    def sample(self, params: PyTree, key: Key, init_samples: Optional[Array] = None):
+        return _vmc_rwm_sample(
+            self.params, self.log_prob, self.eval_observables, params, key, init_samples
+        )
 
 
 def VariationalMetropolis(
@@ -38,6 +40,7 @@ def VariationalMetropolis(
     warmup: int,
     sweep: int = 1,
     *,
+    dims: Optional[Sequence[int]] = None,
     adapt_step_size: bool = True,
     step_size_bounds: Tuple[Scalar, Scalar] = (1e-8, 10.0),
     adapt_metric: bool = True,
@@ -97,13 +100,18 @@ def VariationalMetropolis(
 
 @partial(jax.jit, static_argnames=["rwm_params", "eval_obs"])
 def _vmc_rwm_sample(
-    rwm_params: MCMCParams, logp: Callable, eval_obs: Callable, params: PyTree, key: Key
+    rwm_params: MCMCParams,
+    logp: Callable,
+    eval_obs: Callable,
+    params: PyTree,
+    key: Key,
+    init_samples: Optional[Array],
 ):
 
     logp = Partial(logp, params)
     metric = IdentityMetric()
 
-    samples, info = RWM(logp, rwm_params, metric).sample(key)
+    samples, info = RWM(logp, rwm_params, metric).sample(key, init_samples)
     observables = eval_obs(params, samples)
 
     return samples, observables, info

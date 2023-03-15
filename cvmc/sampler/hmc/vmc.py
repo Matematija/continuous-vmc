@@ -27,10 +27,10 @@ class VHMC:
     params: HMCParams
     eval_observables: Callable = struct.field(repr=False, pytree_node=False)
 
-    def __call__(self, params: PyTree, key: Key, *, init_samples: Optional[Array] = None):
-        return self.sample(params, key, init_samples=init_samples)
+    def __call__(self, params: PyTree, key: Key, *args, **kwargs):
+        return self.sample(params, key, *args, **kwargs)
 
-    def sample(self, params: PyTree, key: Key, *, init_samples: Optional[Array] = None):
+    def sample(self, params: PyTree, key: Key, init_samples: Optional[Array] = None):
         return _vmc_hmc_sample(
             self.params,
             self.log_prob_fun,

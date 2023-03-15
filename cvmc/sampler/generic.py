@@ -70,7 +70,7 @@ class MCMCParams:
     sweep: int
     warmup: int
     adapt_step_size: bool
-    log_step_size_bounds: Tuple[int, int]
+    log_step_size_bounds: Tuple[float, float]
     adapt_metric: bool
     init_step_size_search: bool
     target_acc_rate: Scalar

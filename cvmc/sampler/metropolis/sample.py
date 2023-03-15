@@ -31,11 +31,11 @@ class RWM:
     params: MCMCParams
     initial_metric: Metric = struct.field(repr=False)
 
-    def __call__(self, key: Key):
-        return self.sample(key)
+    def __call__(self, key: Key, *args, **kwargs):
+        return self.sample(key, *args, **kwargs)
 
-    def sample(self, key: Key):
-        return rwm_sample(self.params, self.logp, self.initial_metric, key)
+    def sample(self, key: Key, init_samples: Optional[Array] = None):
+        return rwm_sample(self.params, self.logp, self.initial_metric, key, init_samples)
 
 
 def RandomWalkMetropolis(
@@ -107,13 +107,17 @@ def RandomWalkMetropolis(
 
 
 def sample_rwm_chain(
-    rwm_params: MCMCParams, logp: Callable, metric: Metric, key: Key
+    rwm_params: MCMCParams, logp: Callable, metric: Metric, key: Key, init_sample: Optional[Array]
 ) -> Tuple[Array, MCMCInfo]:
 
     key1, key2, key3 = random.split(key, 3)
     dtype = default_real()
 
-    init = rwm_params.init_fn(shape=rwm_params.dims, key=key1, dtype=dtype)
+    if init_sample is None:
+        init = rwm_params.init_fn(shape=rwm_params.dims, key=key1, dtype=dtype)
+    else:
+        init = init_sample
+
     state = MCMCState(
         x=init, accepted=True, acc_prob=0.0, step_size=rwm_params.initial_step_size, n_steps=0
     )
@@ -127,6 +131,7 @@ def sample_rwm_chain(
     )
 
     info = MCMCInfo(
+        last_sample=samples.x[-1],
         acceptances=samples.accepted.mean(),
         metric=metric if rwm_params.adapt_metric else None,
         n_chains=1,
@@ -138,17 +143,20 @@ def sample_rwm_chain(
 
 @partial(jax.jit, static_argnames="rwm_params")
 def rwm_sample(
-    rwm_params: MCMCParams, logp: Callable, initial_metric: Metric, key: Key
+    rwm_params: MCMCParams,
+    logp: Callable,
+    initial_metric: Metric,
+    key: Key,
+    init_samples: Optional[Array],
 ) -> Tuple[Array, MCMCInfo]:
 
     keys = random.split(key, rwm_params.n_chains)
 
-    samples, info = jax.vmap(
-        sample_rwm_chain,
-        in_axes=(None, None, None, 0),
-        out_axes=(0, 0),
-        # chunk_size=hmc_params.chunk_size,
-    )(rwm_params, logp, initial_metric, keys)
+    in_axes = (None, None, None, 0) + ((0,) if init_samples is not None else (None,))
+
+    samples, info = jax.vmap(sample_rwm_chain, in_axes=in_axes, out_axes=(0, 0))(
+        rwm_params, logp, initial_metric, keys, init_samples
+    )
 
     info = info.replace(n_chains=rwm_params.n_chains)
     out_samples = samples.reshape(-1, *rwm_params.dims).squeeze()

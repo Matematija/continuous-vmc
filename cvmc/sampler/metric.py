@@ -11,22 +11,22 @@ from ..utils.types import Array, DType, default_real
 
 @struct.dataclass
 class Metric:
-    def __call__(self, v: Array) -> Array:
-        raise NotImplementedError("Cannot call methods on an abstract class")
-
     def __matmul__(self, v) -> Array:
         return self(v)
 
     def transform_normal(self, p: Array) -> Array:
         raise NotImplementedError("Cannot call methods on an abstract class")
 
+    def transform_momentum(self, z: Array) -> Array:
+        raise NotImplementedError("Cannot call methods on an abstract class")
+
 
 @struct.dataclass
 class Identity(Metric):
-    def __call__(self, v: Array) -> Array:
-        return v
+    def transform_normal(self, z: Array) -> Array:
+        return z
 
-    def transform_normal(self, p: Array) -> Array:
+    def transform_momentum(self, p: Array) -> Array:
         return p
 
     def to_dense(self, *state_shape, dtype=None):
@@ -49,10 +49,10 @@ class Euclidean(Metric):
     matrix: Array = struct.field(repr=False)
     cholesky: Array = struct.field(repr=False)
 
-    def __call__(self, v: Array) -> Array:
-        return jnp.tensordot(self.matrix, v, axes=self.matrix.ndim // 2)
+    def transform_normal(self, z: Array) -> Array:
+        return jnp.tensordot(self.matrix, z, axes=self.matrix.ndim // 2)
 
-    def transform_normal(self, p: Array) -> Array:
+    def transform_momentum(self, p: Array) -> Array:
         return jnp.tensordot(self.cholesky, p, axes=self.matrix.ndim // 2)
 
     def __repr__(self):
@@ -68,10 +68,10 @@ class DiagonalEuclidean(Metric):
 
     diagonal: Array = struct.field(repr=False)
 
-    def __call__(self, v: Array) -> Array:
-        return self.diagonal * v
+    def transform_normal(self, z: Array) -> Array:
+        return z * jnp.sqrt(self.diagonal)
 
-    def transform_normal(self, p: Array) -> Array:
+    def transform_momentum(self, p: Array) -> Array:
         return p / jnp.sqrt(self.diagonal)
 
     def __repr__(self):
