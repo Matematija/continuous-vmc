@@ -26,19 +26,18 @@ class VHMC:
     log_prob_fun: Callable = struct.field(repr=False)
     params: HMCParams
     eval_observables: Callable = struct.field(repr=False, pytree_node=False)
-    project: bool = False
 
-    def __call__(self, params: PyTree, key: Key):
-        return self.sample(params, key)
+    def __call__(self, params: PyTree, key: Key, *, init_samples: Optional[Array] = None):
+        return self.sample(params, key, init_samples=init_samples)
 
-    def sample(self, params: PyTree, key: Key):
+    def sample(self, params: PyTree, key: Key, *, init_samples: Optional[Array] = None):
         return _vmc_hmc_sample(
             self.params,
             self.log_prob_fun,
             self.eval_observables,
-            self.project,
             params,
             key,
+            init_samples,
         )
 
     def to_dict(self):
@@ -66,7 +65,6 @@ def VariationalHMC(
     initial_step_size: Scalar = 0.1,
     init_step_size_search: bool = True,
     angular: bool = False,
-    augmented: bool = False,
     observables: Optional[Sequence[Observable]] = None
 ) -> VHMC:
 
@@ -114,10 +112,6 @@ def VariationalHMC(
         before adaptation itself, by default True.
     angular : bool, optional
         Whether to treat variables as angles between [-pi, pi], by default False.
-    augmented : bool, optional
-        Whether to "augment" the variational distribution of N angular variables with N auxilliary
-        radial variables, turning the problem into an unconstrained sampling problem, by default False.
-        WARNING: This is experimental and may not work as expected.
     observables : Sequence[Observable], optional
         Observables to evaluate on the samples, by default None. An "observable" is a
         `Callable[[PyTree, Array], Any]` (a callable that takes the variational parameters
@@ -135,21 +129,8 @@ def VariationalHMC(
     else:
         log_prob = lambda params, x: 2 * jnp.real(logpsi(params, x))
 
-    if augmented:
-
-        warn("Sampling with `augmented=True` is experimental and may not work as expected.")
-
-        angular = False
-
-        @Partial
-        def logp(params, xy):
-            thetas = jnp.arctan2(xy[1], xy[0])
-            return -0.5 * jnp.sum(xy**2) + log_prob(params, thetas)
-
-        dims = (2,) + logpsi.dims if dims is None else tuple(dims)
-    else:
-        logp = Partial(log_prob)
-        dims = logpsi.dims if dims is None else tuple(dims)
+    logp = Partial(log_prob)
+    dims = logpsi.dims if dims is None else tuple(dims)
 
     if angular:
         postprocess_proposal = center_proposal
@@ -190,17 +171,17 @@ def VariationalHMC(
 
     eval_obs = partial(eval_observables, observables)
 
-    return VHMC(logp, hmc_params, eval_obs, bool(augmented))
+    return VHMC(logp, hmc_params, eval_obs)
 
 
-@partial(jax.jit, static_argnames=["hmc_params", "eval_obs", "project"])
+@partial(jax.jit, static_argnames=["hmc_params", "eval_obs"])
 def _vmc_hmc_sample(
     hmc_params: HMCParams,
     log_prob_fn: Partial,
     eval_obs: Callable,
-    project: bool,
     params: PyTree,
     key: Key,
+    init_samples: Optional[Array],
 ):
 
     logp = Partial(log_prob_fn, params)
@@ -208,10 +189,8 @@ def _vmc_hmc_sample(
     metric = IdentityMetric()
     initial_hamiltonian = Hamiltonian(logp, metric)
     hmc = HMC(hmc_params, initial_hamiltonian)
-    samples, info = hmc.sample(key)
 
-    if project:
-        samples = jnp.arctan2(samples[:, 1], samples[:, 0])
+    samples, info = hmc.sample(key, init_samples)
 
     observables = eval_obs(params, samples)
 

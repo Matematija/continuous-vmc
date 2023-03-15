@@ -49,16 +49,16 @@ class RungeKuttaIntegrator:
     dt: Scalar = 1e-3
     callback: Optional[Callable] = struct.field(pytree_node=False, default=None, repr=False)
 
-    def __call__(self, state: IntegratorState, key: Optional[Key] = None) -> IntegratorState:
-        return _fixed_step_integrator(self, state, key)
+    def __call__(self, state: IntegratorState, key: Optional[Key] = None, *args) -> IntegratorState:
+        return _fixed_step_integrator(self, state, key, *args)
 
-    def step(self, state: IntegratorState, key: Optional[Key] = None) -> IntegratorState:
-        return _fixed_step_integrator(self, state, key)
+    def step(self, state: IntegratorState, key: Optional[Key] = None, *args) -> IntegratorState:
+        return _fixed_step_integrator(self, state, key, *args)
 
     def initialize(
-        self, init_cond: PyTree, t0: Scalar = 0.0, key: Optional[Key] = None
+        self, init_cond: PyTree, t0: Scalar = 0.0, key: Optional[Key] = None, *args
     ) -> IntegratorState:
-        return _init_integrator(self, init_cond, t0, key)
+        return _init_integrator(self, init_cond, t0, key, *args)
 
     @property
     def n_stages(self):
@@ -91,13 +91,11 @@ class AdaptiveRKIntegrator(RungeKuttaIntegrator):
     max_failed_steps: int = 20
     norm_fn: Callable = struct.field(pytree_node=False, default=euclidean_norm, repr=False)
 
-    def __call__(self, state: IntegratorState, key: Optional[Key] = None) -> IntegratorState:
-        return _adaptive_step_integrator(self, state, key)
+    def __call__(self, state: IntegratorState, key: Optional[Key] = None, *args) -> IntegratorState:
+        return _adaptive_step_integrator(self, state, key, *args)
 
-    def step(
-        self, state: IntegratorState, key: Optional[Key] = None, *norm_args
-    ) -> IntegratorState:
-        return _single_adaptive_step_integrator(self, state, key, norm_args)
+    def step(self, state: IntegratorState, key: Optional[Key] = None, *args) -> IntegratorState:
+        return _single_adaptive_step_integrator(self, state, key, *args)
 
     @property
     def is_adaptive(self):
@@ -110,14 +108,11 @@ class AdaptiveRKIntegrator(RungeKuttaIntegrator):
 
 @struct.dataclass
 class AdaptiveRKIntegratorFSAL(AdaptiveRKIntegrator):
-    def __call__(self, state: IntegratorState, key: Optional[Key] = None) -> IntegratorState:
-        return _adaptive_step_integrator_fsal(self, state, key)
+    def __call__(self, state: IntegratorState, key: Optional[Key] = None, *args) -> IntegratorState:
+        return _adaptive_step_integrator_fsal(self, state, key, *args)
 
-    def step(
-        self, state: IntegratorState, key: Optional[Key] = None, *norm_args
-    ) -> IntegratorState:
-
-        return _single_adaptive_step_integrator_fsal(self, state, key, norm_args)
+    def step(self, state: IntegratorState, key: Optional[Key] = None, *args) -> IntegratorState:
+        return _single_adaptive_step_integrator_fsal(self, state, key, *args)
 
     @property
     def is_fsal(self):
@@ -148,6 +143,7 @@ def RungeKutta(
         norm_fn = _get_norm(norm) if isinstance(norm, str) else Partial(norm)
 
         if not tableau.fsal:
+
             return AdaptiveRKIntegrator(
                 f_,
                 tableau,
@@ -160,7 +156,9 @@ def RungeKutta(
                 max_failed_steps,
                 norm_fn,
             )
+
         else:
+
             return AdaptiveRKIntegratorFSAL(
                 f_,
                 tableau,
@@ -174,11 +172,11 @@ def RungeKutta(
                 norm_fn,
             )
     else:
+
         if not tableau.fsal:
             return RungeKuttaIntegrator(f_, tableau, dt, callback)
         else:
             raise RuntimeError("FSAL integrators are not supported for non-adaptive RK methods.")
-            # return RungeKuttaIntegratorFSAL(f_, tableau, dt, callback)
 
 
 def _get_norm(name: str):
@@ -196,25 +194,25 @@ def canonicalize_rhs_fun(f: Callable, autonomous: bool, has_aux: bool, needs_key
     if has_aux:
         if needs_key:
             if autonomous:
-                canonical_rhs = lambda _, y, key: f(y, key)
+                canonical_rhs = lambda _, y, key, *args: f(y, key, *args)
             else:
                 canonical_rhs = f
         else:
             if autonomous:
-                canonical_rhs = lambda _, y, __: f(y)
+                canonical_rhs = lambda _, y, __, *args: f(y, *args)
             else:
-                canonical_rhs = lambda t, y, __: f(t, y)
+                canonical_rhs = lambda t, y, __, *args: f(t, y, *args)
     else:
         if needs_key:
             if autonomous:
-                canonical_rhs = lambda _, y, key: (f(y, key), None)
+                canonical_rhs = lambda _, y, key, *args: (f(y, key, *args), None)
             else:
-                canonical_rhs = lambda t, y, key: (f(t, y, key), None)
+                canonical_rhs = lambda t, y, key, *args: (f(t, y, key, *args), None)
         else:
             if autonomous:
-                canonical_rhs = lambda _, y, __: (f(y), None)
+                canonical_rhs = lambda _, y, __, *args: (f(y, *args), None)
             else:
-                canonical_rhs = lambda t, y, __: (f(t, y), None)
+                canonical_rhs = lambda t, y, __, *args: (f(t, y, *args), None)
 
     return canonical_rhs
 
@@ -227,18 +225,19 @@ def eval_callback(callback: Optional[Callable], *args, **kwargs):
 
 
 def _init_integrator(
-    integrator: RungeKuttaIntegrator, y0: PyTree, t0: Scalar = 0.0, key: Optional[Key] = None
+    integrator: RungeKuttaIntegrator, y0: PyTree, t0: Scalar = 0.0, key: Optional[Key] = None, *args
 ) -> IntegratorState:
 
     if not all(jnp.all(jnp.isfinite(l)) for l in tree_leaves(y0)):
         raise RuntimeError("Initial condition to the ODE solver must be finite!")
 
     if integrator.is_fsal:
-        first_slope, *aux = integrator.f(t0, y0, key)
+        first_slope, *aux = integrator.f(t0, y0, key, *args)
         info = eval_callback(integrator.callback, y0, *aux)
         fsal_state = FSALState(first_slope, info)
         n_rhs_evals = 1
     else:
+        info = None
         fsal_state = None
         n_rhs_evals = 0
 
@@ -255,11 +254,12 @@ def _init_integrator(
         adapt_state = AdaptationState(
             dt=integrator.dt, accepted=True, y_norm=y_norm, n_failed_steps=0
         )
+
     else:
         adapt_state = None
 
     return IntegratorState(
-        y0, Scalar(t0), n_rhs_evals=n_rhs_evals, fsal_state=fsal_state, adapt_state=adapt_state
+        y0, t0, n_rhs_evals=n_rhs_evals, fsal_state=fsal_state, adapt_state=adapt_state
     )
 
 
@@ -270,16 +270,24 @@ def _init_integrator(
 
 @jax.jit
 def _fixed_step_integrator(
-    integrator: RungeKuttaIntegrator, state: IntegratorState, key: Optional[Key]
+    integrator: RungeKuttaIntegrator, state: IntegratorState, *args, key: Optional[Key]
 ) -> IntegratorState:
 
     key1, key2 = maybe_split(key, 2)
 
-    first_slope, *aux = integrator.f(state.t, state.y, key1)
+    first_slope, *aux = integrator.f(state.t, state.y, key1, *args)
     info = eval_callback(integrator.callback, state.y, *aux)
 
     y, _, _ = step(
-        integrator.tableau, integrator.f, first_slope, aux, integrator.dt, state.t, state.y, key2
+        integrator.tableau,
+        integrator.f,
+        first_slope,
+        aux,
+        integrator.dt,
+        state.t,
+        state.y,
+        key2,
+        *args,
     )
 
     n_rhs_evals = state.n_rhs_evals + integrator.rhs_evals_per_step
@@ -312,12 +320,12 @@ def _propose_dt(
 
 @jax.jit
 def _single_adaptive_step_integrator(
-    integrator: AdaptiveRKIntegrator, state: IntegratorState, key: Optional[Key] = None
+    integrator: AdaptiveRKIntegrator, state: IntegratorState, key: Optional[Key] = None, *args
 ) -> IntegratorState:
 
     key1, key2 = maybe_split(key, 2)
 
-    first_slope, *aux = integrator.f(state.t, state.y, key1)
+    first_slope, *aux = integrator.f(state.t, state.y, key1, *args)
     info = eval_callback(integrator.callback, state.y, *aux)
 
     dt_min, dt_max = integrator.dt_bounds
@@ -327,7 +335,7 @@ def _single_adaptive_step_integrator(
     dt = jnp.minimum(dtp, dt_max) if dt_max is not None else dtp
 
     yp, err, _, last_aux = step_with_error(
-        integrator.tableau, integrator.f, first_slope, dt, state.t, state.y, key2
+        integrator.tableau, integrator.f, first_slope, dt, state.t, state.y, key2, *args
     )
 
     scaled_err, y_norm = _scale_error(
@@ -370,7 +378,7 @@ def _single_adaptive_step_integrator(
 
 @jax.jit
 def _single_adaptive_step_integrator_fsal(
-    integrator: AdaptiveRKIntegrator, state: IntegratorState, key: Optional[Key] = None
+    integrator: AdaptiveRKIntegrator, state: IntegratorState, key: Optional[Key] = None, *args
 ) -> IntegratorState:
 
     first_slope, info = state.fsal_state.slope, state.fsal_state.info
@@ -382,7 +390,7 @@ def _single_adaptive_step_integrator_fsal(
     dt = jnp.minimum(dtp, dt_max) if dt_max is not None else dtp
 
     yp, err, last_slope, aux = step_with_error(
-        integrator.tableau, integrator.f, first_slope, dt, state.t, state.y, key
+        integrator.tableau, integrator.f, first_slope, dt, state.t, state.y, key, *args
     )
 
     scaled_err, y_norm = _scale_error(
@@ -434,7 +442,7 @@ def _single_adaptive_step_integrator_fsal(
 def step_until_accept(step_fn: Callable):
     @jax.jit
     def wrapped(
-        integrator: AdaptiveRKIntegrator, state: IntegratorState, key: Optional[Key]
+        integrator: AdaptiveRKIntegrator, state: IntegratorState, key: Optional[Key], *args
     ) -> IntegratorState:
         def cond_fun(arg):
             state, _ = arg
@@ -445,12 +453,12 @@ def step_until_accept(step_fn: Callable):
 
         def body_fun(arg):
             state, key = arg
-            state_ = step_fn(integrator, state, key)
+            state_ = step_fn(integrator, state, key, *args)
             (key_,) = maybe_split(key, 1)
             return (state_, key_)
 
         key, key_ = maybe_split(key, 2)
-        init_state = step_fn(integrator, state, key)
+        init_state = step_fn(integrator, state, key, *args)
 
         state, _ = lax.while_loop(cond_fun, body_fun, (init_state, key_))
 

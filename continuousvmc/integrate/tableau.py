@@ -36,6 +36,7 @@ def slopes(
     t: Scalar,
     yt: Array,
     key: Key,
+    *args,
 ):
 
     times = t + tableau.c * dt
@@ -53,7 +54,7 @@ def slopes(
 
         yi = tree_map(lambda yt, k: yt + dt * jnp.tensordot(tableau.a[i], k, axes=1), yt, k)
 
-        ki, *aux = f(times[i], yi, keys[i])
+        ki, *aux = f(times[i], yi, keys[i], *args)
         k = tree_map(lambda k, ki: k.at[i].set(ki), k, ki)
 
     return k, ki, aux
@@ -67,10 +68,11 @@ def step(
     dt: Scalar,
     t: Scalar,
     yt: Array,
-    key: Optional[Key] = None,
+    key: Optional[Key],
+    *args,
 ):
 
-    k, final_slope, aux = slopes(tableau, f, init_slope, init_aux, dt, t, yt, key)
+    k, final_slope, aux = slopes(tableau, f, init_slope, init_aux, dt, t, yt, key, *args)
     b = tableau.b[0] if tableau.b.ndim == 2 else tableau.b
 
     yp = tree_map(lambda yt_, k: yt_ + dt * jnp.tensordot(b, k, axes=1), yt, k)
@@ -85,13 +87,14 @@ def step_with_error(
     dt: Scalar,
     t: Scalar,
     yt: Array,
-    key: Key,
+    key: Optional[Key],
+    *args,
 ):
 
     if not tableau.is_adaptive:
         raise RuntimeError(f"The ODE method is not adaptive!")
 
-    k, final_slope, aux = slopes(tableau, f, init_slope, None, dt, t, yt, key)
+    k, final_slope, aux = slopes(tableau, f, init_slope, None, dt, t, yt, key, *args)
     yp = tree_map(lambda y_t, k: y_t + dt * jnp.tensordot(tableau.b[0], k, axes=1), yt, k)
 
     db = tableau.b[0] - tableau.b[1]

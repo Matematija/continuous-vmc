@@ -1,6 +1,5 @@
 from typing import Callable, Optional
 
-import jax
 from jax import numpy as jnp
 from jax.tree_util import tree_map
 
@@ -10,7 +9,7 @@ from .ansatz import canonicalize_ansatz
 from .hamiltonian import LocalEnergy, eloc_value_and_grad
 from .qgt import QuantumGeometricTensor
 from .utils import eval_shape
-from .utils.types import Ansatz, Key, PyTree, Scalar, tree_is_real
+from .utils.types import Ansatz, Key, PyTree, Scalar, Array, tree_is_real
 
 
 @struct.dataclass
@@ -39,11 +38,13 @@ def ParameterDerivative(
 
     apply_fn = canonicalize_ansatz(logpsi)
 
-    def derivative(params: PyTree, key: Key, x0: Optional[PyTree] = None):
+    def derivative(
+        params: PyTree, key: Key, init_samples: Optional[Array] = None, x0: Optional[PyTree] = None
+    ):
 
         # key, _ = mpi_scatter_keys(key)
 
-        samples, observables, sampler_info = sampler(params, key)
+        samples, observables, sampler_info = sampler(params, key, init_samples=init_samples)
         out_shape = eval_shape(apply_fn, params, samples[0])
 
         if tree_is_real(out_shape) and real_time:

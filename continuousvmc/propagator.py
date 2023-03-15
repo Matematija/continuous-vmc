@@ -1,10 +1,8 @@
-from typing import Optional, Callable, Sequence, Tuple
+from typing import Optional, Callable, Tuple
 
 import jax
 from jax import numpy as jnp
 from jax.tree_util import Partial
-
-from flax import struct
 
 from .vmc import ParameterDerivative
 from .integrate import RungeKutta, check_integrator_state
@@ -18,20 +16,9 @@ from .utils.types import PyTree, Array, Ansatz, Scalar
 check_propagator_state = check_integrator_state
 
 
-@struct.dataclass
-class tVMCInfo:
-    observables: Optional[Sequence[Array]] = None
-    energy: Optional[Scalar] = None
-    samples: Optional[Array] = None
-    sampler_info: Optional[PyTree] = struct.field(repr=False, default=None)
-    solver_info: Optional[PyTree] = struct.field(repr=False, default=None)
-
-
-def tvmc_callback(y: PyTree, samples: Array, vmc_info: VMCInfo, *__) -> tVMCInfo:
+def tvmc_callback(y: PyTree, samples: Array, vmc_info: VMCInfo, *__):
     return vmc_info
 
-
-#############################################################################
 
 # Maybe move this to the qgt file?
 def make_qgt_norm(apply_fn: Callable, chunk_size: Optional[int] = None) -> Callable:

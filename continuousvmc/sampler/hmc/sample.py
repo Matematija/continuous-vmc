@@ -15,7 +15,7 @@ from .adaptation import warmup
 from ..metric import Metric, IdentityMetric
 from ..generic import sample_chain, no_postprocessing, randn_init_fn, MCMCInfo, MCMCState
 
-from ...utils.types import Key, Scalar, default_real
+from ...utils.types import Key, Scalar, Array, default_real
 
 
 @struct.dataclass
@@ -27,8 +27,8 @@ class HMC:
     def __call__(self, key: Key):
         return self.sample(key)
 
-    def sample(self, key: Key):
-        return hmc_sample(self.params, self.initial_hamiltonian, key)
+    def sample(self, key: Key, init_samples: Optional[Array] = None):
+        return hmc_sample(self.params, self.initial_hamiltonian, key, init_samples)
 
 
 def HamiltonianMonteCarlo(
@@ -107,12 +107,18 @@ def HamiltonianMonteCarlo(
     return HMC(hmc_params, initial_hamiltonian)
 
 
-def sample_hmc_chain(hmc_params: HMCParams, initial_h: Hamiltonian, key: Key):
+def sample_hmc_chain(
+    hmc_params: HMCParams, initial_h: Hamiltonian, key: Key, init_sample: Optional[Array]
+):
 
     key1, key2, key3 = random.split(key, 3)
     dtype = default_real()
 
-    init = hmc_params.init_fn(shape=hmc_params.dims, key=key1, dtype=dtype)
+    if init_sample is not None:
+        init = init_sample
+    else:
+        init = hmc_params.init_fn(shape=hmc_params.dims, dtype=dtype, key=key1)
+
     state = MCMCState(
         x=init, accepted=True, acc_prob=1.0, step_size=hmc_params.initial_step_size, n_steps=0
     )
@@ -124,18 +130,29 @@ def sample_hmc_chain(hmc_params: HMCParams, initial_h: Hamiltonian, key: Key):
     kernel = hmc_kernel(hmc_params, h)
     samples = sample_chain(kernel, state, key3, hmc_params.n_samples, hmc_params.sweep)
 
-    info = MCMCInfo(samples.accepted.mean(), h.metric, 1, samples.step_size[-1], hmc_params.n_leaps)
+    info = MCMCInfo(
+        samples.x[-1],
+        samples.accepted.mean(),
+        h.metric,
+        1,
+        samples.step_size[-1],
+        hmc_params.n_leaps,
+    )
 
     return samples.x, info
 
 
 @partial(jax.jit, static_argnames="hmc_params")
-def hmc_sample(hmc_params: HMCParams, initial_h: Hamiltonian, key: Key):
+def hmc_sample(
+    hmc_params: HMCParams, initial_h: Hamiltonian, key: Key, init_samples: Optional[Array]
+):
 
     keys = random.split(key, hmc_params.n_chains)
 
-    samples, info = jax.vmap(sample_hmc_chain, in_axes=(None, None, 0), out_axes=(0, 0))(
-        hmc_params, initial_h, keys
+    in_axes = (None, None, 0) + ((0,) if init_samples is not None else (None,))
+
+    samples, info = jax.vmap(sample_hmc_chain, in_axes=in_axes, out_axes=(0, 0))(
+        hmc_params, initial_h, keys, init_samples
     )
 
     info = info.replace(n_chains=hmc_params.n_chains)

@@ -96,6 +96,7 @@ class MCMCState:
 @struct.dataclass
 class MCMCInfo:
 
+    last_sample: Optional[Array] = None
     acceptances: Optional[Array] = None
     metric: Optional[Metric] = None
     n_chains: Optional[int] = None
