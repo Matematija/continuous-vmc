@@ -32,6 +32,9 @@ class VRWM:
             self.params, self.log_prob, self.eval_observables, params, key, init_samples
         )
 
+    def to_dict(self):
+        return {k: v for k, v in self.params.__dict__.items() if not callable(v)}
+
 
 def VariationalMetropolis(
     logpsi: Ansatz,

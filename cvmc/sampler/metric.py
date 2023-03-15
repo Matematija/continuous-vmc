@@ -11,8 +11,8 @@ from ..utils.types import Array, DType, default_real
 
 @struct.dataclass
 class Metric:
-    def __matmul__(self, v) -> Array:
-        return self(v)
+    def __matmul__(self, v: Array) -> Array:
+        raise NotImplementedError("Cannot call methods on an abstract class")
 
     def transform_normal(self, p: Array) -> Array:
         raise NotImplementedError("Cannot call methods on an abstract class")
@@ -23,11 +23,11 @@ class Metric:
 
 @struct.dataclass
 class Identity(Metric):
+    def __matmul__(self, vec: Array) -> Array:
+        return vec
+
     def transform_normal(self, z: Array) -> Array:
         return z
-
-    def transform_momentum(self, p: Array) -> Array:
-        return p
 
     def to_dense(self, *state_shape, dtype=None):
         n = np.prod(state_shape)
@@ -47,13 +47,13 @@ def IdentityMetric():
 class Euclidean(Metric):
 
     matrix: Array = struct.field(repr=False)
-    cholesky: Array = struct.field(repr=False)
+    inv_cholesky: Array = struct.field(repr=False)
+
+    def __matmul__(self, vec: Array) -> Array:
+        return jnp.tensordot(self.matrix, vec, axes=self.matrix.ndim // 2)
 
     def transform_normal(self, z: Array) -> Array:
-        return jnp.tensordot(self.matrix, z, axes=self.matrix.ndim // 2)
-
-    def transform_momentum(self, p: Array) -> Array:
-        return jnp.tensordot(self.cholesky, p, axes=self.matrix.ndim // 2)
+        return jnp.tensordot(self.cholesky, z, axes=self.matrix.ndim // 2)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(shape={self.shape})"
@@ -68,11 +68,11 @@ class DiagonalEuclidean(Metric):
 
     diagonal: Array = struct.field(repr=False)
 
+    def __matmul__(self, vec: Array) -> Array:
+        return vec / self.diagonal
+
     def transform_normal(self, z: Array) -> Array:
         return z * jnp.sqrt(self.diagonal)
-
-    def transform_momentum(self, p: Array) -> Array:
-        return p / jnp.sqrt(self.diagonal)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(shape={self.shape})"
@@ -85,23 +85,23 @@ class DiagonalEuclidean(Metric):
         return self.diagonal.shape * 2
 
 
-def EuclideanMetric(matrix: Array, diagonal: bool = False):
+def EuclideanMetric(v: Array, diagonal: bool = False):
 
     if not diagonal:
 
-        shape = matrix.shape
+        shape = v.shape
         ndim = len(shape) // 2
         flat_shape = np.prod(shape[:ndim])
 
-        cholesky = jnp.linalg.cholesky(matrix.reshape(flat_shape, flat_shape))
+        cov_cholesky = jnp.linalg.cholesky(v.reshape(flat_shape, flat_shape))
 
-        identity = jnp.identity(flat_shape, dtype=matrix.dtype)
-        cholesky = solve_triangular(cholesky, identity, lower=True)
+        identity = jnp.identity(flat_shape, dtype=v.dtype)
+        cholesky = solve_triangular(cov_cholesky, identity, lower=True)
 
-        return Euclidean(matrix, cholesky.reshape(*shape))
+        return Euclidean(v, cholesky.reshape(*shape))
 
     else:
-        return DiagonalEuclidean(matrix)
+        return DiagonalEuclidean(v)
 
 
 ################################################################################

@@ -25,7 +25,7 @@ def _leapfrog_body_fn(
     h: Hamiltonian, dt: Scalar, _: int, xp: Tuple[Array, Array]
 ) -> Tuple[Array, Array]:
     x, p = xp
-    x += dt * h.metric(p)
+    x += dt * (h.metric @ p)
     p -= dt * h.position_grad(x, p)
     return x, p
 
@@ -39,7 +39,7 @@ def leapfrog_proposal(
     step_fn = partial(_leapfrog_body_fn, h, dt)
     x, p = lax.fori_loop(0, n_leaps - 1, step_fn, (x, p))
 
-    x += dt * h.metric(p)
+    x += dt * (h.metric @ p)
     p -= (dt / 2) * h.position_grad(x, p)
 
     return x, -p
@@ -72,7 +72,7 @@ def hmc_kernel(hmc_params: HMCParams, h: Hamiltonian, state: MCMCState, key: Key
     x = state.x
 
     p = random.normal(key1, shape=x.shape, dtype=x.dtype)
-    p = h.metric.transform_momentum(p)
+    p = h.metric.transform_normal(p)
 
     n_leaps = jitter_trajectory_length(hmc_params.n_leaps, hmc_params.jitter, key2)
 

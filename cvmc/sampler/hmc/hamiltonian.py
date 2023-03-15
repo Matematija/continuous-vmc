@@ -23,7 +23,7 @@ class Hamiltonian:
 
 @jax.jit
 def _eval_hamiltonian(h: Hamiltonian, x: Array, p: Array):
-    return 0.5 * jnp.sum(p * h.metric(p)) - h.logp(x)
+    return 0.5 * jnp.sum(p * (h.metric @ p)) - h.logp(x)
 
 
 _grad_hamiltonian = jax.jit(jax.grad(_eval_hamiltonian, argnums=1))
