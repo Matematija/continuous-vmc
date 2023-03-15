@@ -13,7 +13,7 @@ BASE_DEPENDENCIES = [
 # MPI_DEPENDENCIES = ["mpi4py>=3.0.1, <4", "mpi4jax~=0.3.1"]
 
 setup(
-    name="continuousvmc",
+    name="cvmc",
     author="Matija Medvidovic",
     url="https://github.com/Matematija/continuous-vmc",
     author_email="matija.medvidovic@columbia.edu",
