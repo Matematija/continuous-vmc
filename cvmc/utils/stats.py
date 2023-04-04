@@ -8,7 +8,7 @@ from jax.numpy import fft
 from jax.tree_util import tree_map
 
 from .chunk import vmap_chunked
-from .types import Array, PyTree, Scalar
+from .types import Array, PyTree, Scalar, Key
 
 
 def circvar(samples: Array, axis: Optional[Union[int, Sequence[int]]] = None) -> Array:
@@ -40,6 +40,22 @@ def circcov(samples: Array, batch_axis: int = 0, ddof: int = 1) -> Array:
     cov = sines.T.conj() @ sines
 
     return cov.reshape(*shape, *shape).squeeze() / (jnp.sqrt(2) - 1.0)
+
+
+@partial(jax.jit, static_argnames="n_bootstraps")
+def bootstrap_error(data: Array, key: Key, n_bootstraps: int = None):
+
+    # data.shape = (*batch, n_samples)
+    n_samples = data.shape[-1]
+
+    if n_bootstraps is None:
+        n_bootstraps = n_samples
+
+    idxs = jax.random.choice(key, n_samples, shape=(n_bootstraps, n_samples), replace=True)
+    resampled = jnp.take(data, idxs, axis=-1).mean(axis=-1)
+    v = jnp.mean(resampled**2, axis=-1) - jnp.mean(resampled, axis=-1) ** 2
+
+    return jnp.sqrt(v)
 
 
 @jax.jit

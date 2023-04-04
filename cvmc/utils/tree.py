@@ -16,8 +16,16 @@ from jax.tree_util import (
 from .types import PyTree, Array, Key
 
 
+# def tree_dot(a: PyTree, b: PyTree) -> PyTree:
+#     return tree_reduce(jnp.add, tree_map(jnp.sum, tree_map(jnp.multiply, a, b)))
+
+
 def tree_dot(a: PyTree, b: PyTree) -> PyTree:
-    return tree_reduce(jnp.add, tree_map(jnp.sum, tree_map(jnp.multiply, a, b)))
+    return tree_reduce(jnp.add, tree_map(lambda u, v: jnp.sum(u * v), a, b))
+
+
+def tree_vdot(a: PyTree, b: PyTree) -> PyTree:
+    return tree_reduce(jnp.add, tree_map(lambda u, v: jnp.sum(u.conj() * v), a, b))
 
 
 def xpay(x: PyTree, y: PyTree, a: Any) -> PyTree:

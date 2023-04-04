@@ -9,9 +9,11 @@ from jax.numpy.fft import fftn, ifftn
 
 from .utils.ad import grad
 from .utils.stats import tau_int, circvar
+from .utils.tree import tree_vdot
 from .utils.chunk import vmap_chunked
 
-from .hamiltonian import LocalEnergy
+from .hamiltonian import LocalEnergy, eloc_value_and_grad
+from .qgt import QuantumGeometricTensor
 from .utils import Array, PyTree, Ansatz, Scalar
 
 Observable = Callable[[PyTree, Array], Array]
@@ -317,6 +319,51 @@ def fidelity(
         return jnp.real(jnp.exp(term1 + term2))
 
     return f
+
+
+def energy_variance(eloc: LocalEnergy, chunk_size: Optional[int] = None) -> Observable:
+
+    """Compute the variance of the energy of a set of samples.
+
+    Parameters
+    ----------
+    eloc : LocalEnergy
+        The local energy observable.
+    chunk_size : Optional[int], optional
+        Chunk size for jax.vmap vectorization. Defaults to None.
+
+    Returns
+    -------
+    Observable
+        Function that computes the variance of the energy of a set of samples.
+    """
+
+    eloc_fn = vmap_chunked(eloc, in_axes=(None, 0), chunk_size=chunk_size)
+
+    def var(params: PyTree, samples: Array) -> Scalar:
+        eloc_vals = eloc_fn(params, samples)
+        return jnp.mean(eloc_vals.real**2 + eloc_vals.imag**2)
+
+    return var
+
+
+def tdvp_error(logpsi: Ansatz, eloc: LocalEnergy, *args, **kwargs) -> Observable:
+
+    qgt = QuantumGeometricTensor(logpsi, *args, **kwargs)
+
+    def error(params: PyTree, samples: Array, *args) -> Scalar:
+
+        _, g, Ec = eloc_value_and_grad(eloc, params, samples, chunk_size=eloc.chunk_size)
+
+        theta_dot, _ = qgt.solve(params, samples, g, *args)
+        corr = tree_vdot(g, theta_dot)
+
+        v = jnp.mean(Ec.real**2 + Ec.imag**2)
+        eps = jnp.finfo(v.dtype).eps
+
+        return 1.0 - jnp.real(corr) / jnp.clip(v, eps)
+
+    return error
 
 
 ########################################################################################################################
